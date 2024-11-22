@@ -1,0 +1,57 @@
+<?php
+
+namespace App\Http\Services\V1\Admin\User\Technician;
+
+use App\Http\Services\Singleton;
+use App\Models\Traits\EquipmentAssignationTrait;
+use App\Models\V1\Equipment;
+use App\Models\V1\NetworkOperatorEquipmentType;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Livewire\Component;
+
+class TechnicianAddEquipmentService extends Singleton
+{
+    use EquipmentAssignationTrait;
+
+
+    public function submitForm(Component $component)
+    {
+        DB::transaction(function () use ($component) {
+            if (count($component->selectedRows) == 0) {
+                $component->emitTo('livewire-toast', 'show', ['type' => 'warning', 'message' => "Seleccione un tipo de equipo"]);
+                return;
+            }
+            foreach ($component->selectedRows as $equipmentId) {
+                if ($component->model->equipments()->whereId($equipmentId)->exists()) {
+                    return;
+                }
+
+                $equipment = Equipment::find($equipmentId);
+                $equipment->update([
+                    "technician_id" => $component->model->id,
+                ]);
+            }
+            $this->refreshEquipmentType($component);
+            $component->emitTo('livewire-toast', 'show', ['type' => 'success', 'message' => "Equipos agregados"]);
+        });
+    }
+
+    public function deleteEquipmentAssigned(Component $component, $equipmentId)
+    {
+        Equipment::whereId($equipmentId)->update([
+            "technician_id" => null,
+            "has_technician" => false
+        ]);
+        $component->model->refresh();
+        $component->emitTo('livewire-toast', 'show', ['type' => 'success', 'message' => "Equipo eliminado"]);
+    }
+
+    private function getEquipmentTypes()
+    {
+        if ($admin = Auth::user()->getAdmin()) {
+            return $admin->equipmentTypesAsKeyValue();
+        }
+        return [];
+    }
+}
